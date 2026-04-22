@@ -1,4 +1,4 @@
-package llm.openai.functioncalling;
+package llm.openai.tool;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

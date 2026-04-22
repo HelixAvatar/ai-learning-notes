@@ -1,11 +1,10 @@
-package llm.openai.functioncalling;
+package llm.openai.tool;
 
-import com.fasterxml.jackson.annotation.JsonClassDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.alibaba.fastjson2.JSON;
 import com.google.common.base.Strings;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
-import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall.Function;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import java.time.LocalDateTime;
@@ -14,81 +13,46 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import llm.openai.Single;
-import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class OpenAIFunctionCalling2 {
-
-
-  @JsonClassDescription("分析特征的血缘关系")
-  static class FeatureDataLineage {
-
-    @JsonPropertyDescription("特征名称, 变量名可以包含英文数字和下划线")
-    public String featureName;
-
-    @Tool(name = "FeatureDataLineage", description = "分析特征的血缘关系")
-    public String featureDataLineage() {
-      log.info("分析特征的血缘关系: {}", featureName);
-      return "特征 " + featureName + " 的血缘关系分析结果如下：\n" +
-          """
-              ## 引入特征
-              - a: 特征 a
-              - b: 特征 b
-              - c: 特征 c
-              
-              ## 计算过程
-              featureName = a + b * c
-              """;
-    }
-  }
-
-  @ToString
-  @JsonClassDescription("日程创建")
-  static class ScheduleManagementCreate {
-
-    @JsonPropertyDescription("日程名称")
-    public String name;
-    @JsonPropertyDescription("日程描述")
-    public String description;
-    @JsonPropertyDescription("日程时间, 格式为 yyyy-MM-dd hh:mm:ss")
-    public String time;
-
-    public String execute() {
-      log.info("创建日程: {} 具体参数 {}", name, this);
-      return "日程 " + name + " 创建成功";
-    }
-  }
+public class OpenAIFunctionCallingWithTool {
 
   public static void main(String[] args) {
     String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss"));
     log.info("当前时间: {}", now);
 
+    ToolBox toolBox = new ToolBox();
+    toolBox.addTool(new BasicTool());
+    toolBox.addTool(new FeatureDataLineageTool());
+
     ChatCompletionCreateParams.Builder chatBuilder = ChatCompletionCreateParams.builder()
         .model("dashscope/qwen3.5")
         .maxCompletionTokens(12048)
-        .addFunctionTool()
-        .addTool(FeatureDataLineage.class)
-        .addTool(ScheduleManagementCreate.class)
-        .addSystemMessage("当前时间为 " + now);
+        .addSystemMessage("You are a helpful assistant with access to tools. "
+            + "Use tools when needed to answer questions accurately. "
+            + "Always explain what you're doing when using tools.");
+
+    // 注册工具
+    toolBox.getFunctionDefinitions().forEach(chatBuilder::addFunctionTool);
 
     List<String> questions = List.of(
         "今天天气怎样？",
-        "分析 abc_dd_v2 的血缘关系",
+        "分析 芝麻分 的血缘关系",
         "明天 10 预定会议，分享 AI Function Calling",
-        "进行旅游规划，要求从北京出去，第一站北海，第二站云南，最后回到北京。历时8-10天。"
+        "进行旅游规划，要求从北京出去，最后回到北京。历时8-10天。"
     );
 
     for (int index = 0; index < questions.size(); index++) {
       log.info("第 {} 个请求: {}", index + 1, questions.get(index));
       chatBuilder.addUserMessage(questions.get(index));
-      functionCallingDeal(chatBuilder);
+      functionCallingDeal(toolBox, chatBuilder);
     }
 
     printAllMessage(chatBuilder.build().messages());
   }
 
-  static void functionCallingDeal(ChatCompletionCreateParams.Builder chatBuilder) {
+  static void functionCallingDeal(ToolBox toolBox, ChatCompletionCreateParams.Builder chatBuilder) {
     final int maxIterations = 100;
     int iterations = 0;
     while (iterations < maxIterations) {
@@ -105,7 +69,11 @@ public class OpenAIFunctionCalling2 {
           .flatMap(message -> message.toolCalls().stream().flatMap(Collection::stream)) // 展开 toolCalls 进行后续工具调用
           .forEach(toolCall -> {
             log.info("toolCall: {}", toolCall);
-            Object result = callFunction(toolCall.asFunction().function());
+
+            Function function = toolCall.asFunction().function();
+
+            Object result = toolBox.callTool(function.name(), JSON.parseObject(function.arguments()));
+
             // Add the tool call result to the conversation.
             chatBuilder.addMessage(ChatCompletionToolMessageParam.builder()
                 .toolCallId(toolCall.asFunction().id())
@@ -127,22 +95,10 @@ public class OpenAIFunctionCalling2 {
     log.debug("request after: {}", build.messages());
   }
 
-  private static Object callFunction(ChatCompletionMessageFunctionToolCall.Function function) {
-    return switch (function.name()) {
-      case "FeatureDataLineage" -> function.arguments(FeatureDataLineage.class).execute();
-      case "ScheduleManagementCreate" -> function.arguments(ScheduleManagementCreate.class).execute();
-      default -> throw new IllegalArgumentException("Unknown function: " + function.name());
-    };
-  }
-
   private static void printAllMessage(List<ChatCompletionMessageParam> messages) {
     log.info(Strings.repeat("\n", 10));
     log.info(Strings.repeat("=", 80));
     log.info("All messages: {} 条", messages.size());
-
     messages.forEach(message -> log.info("Message: {}", message));
-
   }
-
-
 }
