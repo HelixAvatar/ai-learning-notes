@@ -30,7 +30,7 @@ public class ACPClientAny {
     var session = client.newSession(new NewSessionRequest("/workspace", List.of()));
     var response = client.prompt(new PromptRequest(
         session.sessionId(),
-        List.of(new TextContent("What is 2+2? Reply with just the number."))
+        List.of(new TextContent("帮我用 Python 写一个排序算法"))
     ));
 
     log.info("Response: {}", response);
