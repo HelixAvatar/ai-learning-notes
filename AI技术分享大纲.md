@@ -1,6 +1,6 @@
 # AI 技术分享大纲
 
-## 一、基础概念速通（5 min）
+## 一、基础概念速通
 
 > 目的：建立共同语言
 
@@ -25,13 +25,15 @@
 
 ---
 
-## 二、技术栈（15 min）
+## 二、关键技术
 
 1. 大模型（LLM）
 2. Memory
 3. 工具调用（Function Calling）
 4. 工具（Tools）
 5. MCP 协议
+6. skill（技能）
+
 
 ---
 
@@ -1265,7 +1267,7 @@ class ReActAgent:
 
 ---
 
-## 四、Agent 进阶：多 Agent 协作（10 min）
+## 四、Agent 进阶：多 Agent 协作
 
 ### 4.1 为什么单个 Agent 不够用？
 
